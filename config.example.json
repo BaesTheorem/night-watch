@@ -1,0 +1,38 @@
+{
+  "home": {
+    "lat": 39.0997,
+    "lng": -94.5786,
+    "label": "home"
+  },
+  "radius_miles": 0.75,
+  "vault_dir": "~/notes/Neighborhood Watch",
+  "crime": {
+    "_comment": "KC Open Data (Socrata). Geocoded but published with a multi-week lag, so this is the context/legitimacy layer, not live alerts.",
+    "incidents_dataset": "f7wj-ckmw",
+    "calls_dataset": "4cef-rqti",
+    "lookback_days": 120,
+    "app_token": ""
+  },
+  "scanner": {
+    "_comment": "Broadcastify live audio (real-time alert layer). Free account required; stream URLs are session-gated, so the script logs in to fetch them. Add one or more feeds; each runs its own capture. Browse feeds at broadcastify.com/listen/mid/63 (KC Metro).",
+    "feeds": [
+      { "id": "36219", "name": "KC Fire", "stream_url": "" },
+      { "id": "23630", "name": "KC Regional Public Safety", "stream_url": "" }
+    ],
+    "username": "",
+    "password": "",
+    "segment_seconds": 30,
+    "whisper_model": "mlx-community/whisper-small.en-mlx"
+  },
+  "alerts": {
+    "_comment": "near_streets: lowercased street names within/around your radius matched against transcribed dispatch audio. priority_keywords: incident types that always alert regardless of location. notify_command: optional path to your own notifier, called as `<command> <message> <severity>`; leave empty for native macOS notifications.",
+    "notify_command": "",
+    "near_streets": [],
+    "priority_keywords": [
+      "shots fired", "shooting", "stabbing", "armed", "robbery in progress",
+      "structure fire", "house fire", "explosion", "officer needs assistance",
+      "pursuit", "hostage", "active shooter", "person with a gun"
+    ],
+    "quiet_hours": []
+  }
+}

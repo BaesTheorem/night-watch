@@ -1,0 +1,5 @@
+# Transcription (Apple Silicon, local — no API/tokens)
+mlx-whisper
+# GUI
+flask
+pywebview

@@ -1,0 +1,15 @@
+# Personal / sensitive — never commit
+config.json
+notify-*.sh
+icon.iconset/
+*.local.json
+logs/
+spool/
+*.wav
+*.mp3
+*.aac
+data/
+*.pyc
+__pycache__/
+.venv/
+.DS_Store

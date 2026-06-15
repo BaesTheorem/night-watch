@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Night Watch</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  /* Citizen-inspired: near-black, clean white sans, monochrome chrome,
+     color reserved for incident severity. Square corners (flat/sharp). */
+  :root{
+    --bg:#000; --panel:#0c0c0d; --panel2:#111113; --line:#222226; --ink:#fff;
+    --dim:#9a9da3; --dim2:#62656b; --ok:#fff; --red:#ff453a; --orange:#ff9f0a;
+    --priority:#ff453a; --nearby:#ff9f0a;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:"Helvetica Neue",-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;
+    font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  header{display:flex;align-items:center;gap:28px;padding:15px 24px;background:var(--bg);
+    border-bottom:1px solid var(--line)}
+  .logo{display:flex;align-items:center;gap:11px}
+  .logo .brand{font-weight:700;letter-spacing:2.5px;font-size:16px}
+  nav{display:flex;gap:2px;margin-left:auto}
+  nav button{background:none;border:none;color:var(--dim);padding:7px 14px;cursor:pointer;
+    font-family:inherit;font-size:12px;font-weight:600;letter-spacing:1.5px}
+  nav button:hover{color:var(--ink)}
+  nav button.active{color:var(--ink)}
+  .statusbar{display:flex;align-items:center;gap:10px;padding:9px 24px;background:var(--panel);
+    border-bottom:1px solid var(--line)}
+  .clock{margin-left:auto;color:var(--dim2);font-size:12px;font-variant-numeric:tabular-nums;letter-spacing:.5px}
+  .svc-pills{display:flex;gap:8px}
+  .pill{display:flex;align-items:center;gap:7px;padding:4px 11px;border:1px solid var(--line);
+    cursor:pointer;user-select:none;font-size:12px;background:var(--bg)}
+  .pill .dot{width:7px;height:7px;border-radius:50%;background:var(--dim2)}
+  .pill.on .dot{background:var(--ok)}
+  .pill.scheduled .dot{background:none;border:1px solid var(--dim)}
+  .pill.scheduled.on .dot{background:var(--ink);border-color:var(--ink)}
+  .pill small{color:var(--dim)}
+  main{padding:22px 24px}
+  .tab{display:none}.tab.active{display:block}
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);
+    border:1px solid var(--line);margin-bottom:22px}
+  .stat{background:var(--bg);padding:17px 20px}
+  .stat .v{font-size:32px;font-weight:700;letter-spacing:-1px;line-height:1}
+  .stat .k{color:var(--dim2);text-transform:uppercase;font-size:10px;letter-spacing:1.5px;margin-top:7px}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .panel{border:1px solid var(--line);background:var(--bg)}
+  .panel h2{margin:0;font-size:11px;letter-spacing:2px;color:var(--dim);text-transform:uppercase;
+    font-weight:600;padding:13px 16px;border-bottom:1px solid var(--line)}
+  .panel .body{max-height:64vh;overflow:auto}
+  .row{padding:10px 16px;border-bottom:1px solid var(--line);display:flex;gap:11px}
+  .row:last-child{border-bottom:none}
+  .row .t{color:var(--dim2);white-space:nowrap;font-variant-numeric:tabular-nums;font-size:12px}
+  .row .feed{color:var(--dim);font-size:10px;border:1px solid var(--line);padding:1px 5px;
+    height:fit-content;letter-spacing:.5px}
+  .alert{padding:13px 16px;border-bottom:1px solid var(--line);border-left:3px solid var(--line)}
+  .alert:last-child{border-bottom:none}
+  .alert.priority{border-left-color:var(--priority)}
+  .alert.nearby{border-left-color:var(--nearby)}
+  .alert .head{display:flex;align-items:center;gap:9px;margin-bottom:5px}
+  .alert .reason{font-weight:700;font-size:15px}
+  .alert .meta{color:var(--dim2);font-size:12px;margin-bottom:3px}
+  .alert .txt{color:var(--dim);font-size:13px}
+  .badge{padding:2px 7px;font-size:10px;text-transform:uppercase;letter-spacing:1px;font-weight:700}
+  .badge.priority{background:var(--priority);color:#fff}
+  .badge.nearby{background:var(--nearby);color:#000}
+  #map{height:76vh;border:1px solid var(--line)}
+  .maphead{display:flex;gap:14px;align-items:center;margin-bottom:10px;color:var(--dim)}
+  form .field{margin-bottom:16px}
+  label{display:block;color:var(--dim);text-transform:uppercase;font-size:10px;letter-spacing:1.5px;
+    margin-bottom:6px;font-weight:600}
+  input,textarea,select{width:100%;background:var(--panel);border:1px solid var(--line);color:var(--ink);
+    padding:9px 11px;font-family:inherit;font-size:14px}
+  input:focus,textarea:focus,select:focus{outline:none;border-color:var(--dim)}
+  textarea{min-height:96px;resize:vertical}
+  .inline{display:flex;gap:8px}.inline>*{flex:1}
+  button.act{background:var(--ink);border:1px solid var(--ink);color:#000;padding:11px 18px;cursor:pointer;
+    font-family:inherit;letter-spacing:1px;font-weight:700;font-size:12px;text-transform:uppercase}
+  button.act:hover{background:#000;color:var(--ink)}
+  button.small{padding:7px 13px;border:1px solid var(--line);background:var(--panel);color:var(--ink);
+    cursor:pointer;font-family:inherit;font-size:13px}
+  button.small:hover{border-color:var(--dim)}
+  .feedlist .feeditem{display:flex;gap:8px;align-items:center;border:1px solid var(--line);
+    padding:8px 11px;margin-bottom:6px}
+  .feedlist .feeditem .x{color:var(--red);cursor:pointer;margin-left:auto;font-size:12px}
+  .muted{color:var(--dim2)}
+  .toast{position:fixed;bottom:20px;right:20px;border:1px solid var(--ink);background:#000;
+    color:var(--ink);padding:12px 18px;display:none;font-size:13px}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">
+    <svg viewBox="0 0 26 26" width="24" height="24" fill="none" aria-hidden="true">
+      <path d="M7.7 4.6 a10 10 0 0 0 0 16.8" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/>
+      <path d="M18.3 4.6 a10 10 0 0 1 0 16.8" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/>
+      <circle cx="13" cy="13" r="3.3" fill="#fff"/>
+    </svg>
+    <span class="brand">NIGHT WATCH</span>
+  </div>
+  <nav>
+    <button class="active" data-tab="dash">DASHBOARD</button>
+    <button data-tab="map">MAP</button>
+    <button data-tab="settings">SETTINGS</button>
+  </nav>
+</header>
+<div class="statusbar">
+  <div class="svc-pills" id="pills"></div>
+  <span class="clock" id="clock">--:--:--</span>
+</div>
+<main>
+  <section class="tab active" id="dash">
+    <div class="stats" id="stats"></div>
+    <div class="cols">
+      <div class="panel"><h2>Live Transcript</h2><div class="body" id="transcript"></div></div>
+      <div class="panel"><h2>Scanner Alerts</h2><div class="body" id="alerts"></div></div>
+    </div>
+  </section>
+
+  <section class="tab" id="map">
+    <div class="maphead">
+      <span id="crimeMeta">crime layer</span>
+      <button class="small" onclick="runCrime()">Refresh crime data</button>
+    </div>
+    <div id="map"></div>
+  </section>
+
+  <section class="tab" id="settings">
+    <form id="cfgForm" onsubmit="return false">
+      <div class="cols">
+        <div>
+          <div class="field"><label>Home address</label>
+            <div class="inline"><input id="addr" placeholder="street, city, state">
+              <button class="small" onclick="geocode()" type="button">Geocode</button></div>
+            <div class="muted" id="coords"></div>
+          </div>
+          <div class="field"><label>Radius (miles)</label><input id="radius" type="number" step="0.05" min="0.1"></div>
+          <div class="field"><label>Near streets (one per line)</label><textarea id="streets"></textarea></div>
+          <div class="field"><label>Priority keywords (one per line)</label><textarea id="keywords"></textarea></div>
+          <div class="field"><label>Quiet hours (e.g. 23-6, one per line)</label><textarea id="quiet" style="min-height:50px"></textarea></div>
+        </div>
+        <div>
+          <div class="field"><label>Active feeds</label>
+            <div class="feedlist" id="feedlist"></div>
+            <div class="inline"><select id="feedpick"><option>loading directory…</option></select>
+              <button class="small" type="button" onclick="addFeed()">Add</button></div>
+          </div>
+          <div class="field"><label>Broadcastify account</label>
+            <input id="bcuser" placeholder="username">
+            <input id="bcpass" type="password" placeholder="password (leave blank to keep)" style="margin-top:6px">
+          </div>
+          <div class="field"><label>Whisper model</label><input id="model"></div>
+          <div class="inline">
+            <button class="act" type="button" onclick="saveCfg()">Save config</button>
+            <button class="act" type="button" onclick="saveCfg(true)">Save &amp; restart capture</button>
+          </div>
+        </div>
+      </div>
+    </form>
+  </section>
+</main>
+<div class="toast" id="toast"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+let CFG=null, MAP=null, mapDrawn=false, allFeeds=[];
+
+function toast(m){const t=$('#toast');t.textContent=m;t.style.display='block';setTimeout(()=>t.style.display='none',2200);}
+const api=(u,o)=>fetch(u,o).then(r=>r.json());
+
+// tabs
+function showTab(name){
+  $$('nav button').forEach(x=>x.classList.toggle('active',x.dataset.tab===name));
+  $$('.tab').forEach(t=>t.classList.toggle('active',t.id===name));
+  if(name==='map') drawMap();
+  if(name==='settings') loadCfg();
+  if(location.hash!=='#'+name) location.hash=name;
+}
+$$('nav button').forEach(b=>b.onclick=()=>showTab(b.dataset.tab));
+window.addEventListener('hashchange',()=>{const t=location.hash.slice(1);if(t)showTab(t);});
+
+// header
+setInterval(()=>$('#clock').textContent=new Date().toLocaleTimeString(),1000);
+const SVC=['capture','transcribe','crime'];
+async function refreshStatus(){
+  const s=await api('/api/status');
+  $('#pills').innerHTML=SVC.map(k=>{
+    const svc=s.services[k]||{running:false,kind:'daemon'};
+    if(svc.kind==='scheduled'){
+      const lbl=svc.running?'running':'scheduled';
+      const last=s.crime_last_run?`last pull ${s.crime_last_run}`:'no data yet';
+      return `<div class="pill scheduled ${svc.running?'on':''}" title="weekly job · ${last} · click to run now"
+        onclick="runService('${k}')"><span class="dot"></span>${k}<small>${lbl}</small></div>`;
+    }
+    return `<div class="pill ${svc.running?'on':''}" onclick="toggle('${k}',${svc.running})">
+      <span class="dot"></span>${k}<small>${svc.running?'on':'off'}</small></div>`;
+  }).join('');
+  $('#stats').innerHTML=[
+    ['transcribed today',s.transcribed_today],['spool queue',s.spool_queue],
+    ['feeds',(s.feeds||[]).length],['',(s.feeds||[]).map(f=>f.name||f.id).join(', ')||'—']
+  ].map(([k,v])=>`<div class="stat"><div class="v">${typeof v==='number'?v:''}</div>
+    <div class="k">${k||'active feeds'}</div>${typeof v==='number'?'':'<div class="muted" style="font-size:11px">'+v+'</div>'}</div>`).join('');
+}
+async function toggle(k,on){await fetch(`/api/service/${k}/${on?'stop':'restart'}`,{method:'POST'});toast(`${k} ${on?'stopped':'started'}`);setTimeout(refreshStatus,800);}
+async function runService(k){await fetch(`/api/service/${k}/run`,{method:'POST'});toast(`${k} pull started`);setTimeout(refreshStatus,1500);}
+
+async function refreshDash(){
+  const tr=await api('/api/transcript?n=80');
+  $('#transcript').innerHTML=tr.length?tr.map(r=>`<div class="row"><span class="t">${r.time}</span>
+    <span class="feed">${r.feed}</span><span>${esc(r.text)}</span></div>`).join(''):'<div class="row muted">waiting for traffic…</div>';
+  const al=await api('/api/alerts');
+  $('#alerts').innerHTML=al.length?al.map(a=>`<div class="alert ${a.severity}">
+    <div class="head"><span class="badge ${a.severity}">${a.severity}</span>
+      <span class="reason">${esc(a.reason)}</span></div>
+    <div class="meta">${a.when} · feed ${a.feed}</div>
+    <div class="txt">${esc(a.text)}</div></div>`).join(''):
+    '<div class="row muted">no alerts yet — fires when a near-home street or priority keyword is heard</div>';
+}
+const esc=s=>(s||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+
+// map
+async function drawMap(){
+  const c=await api('/api/crime');
+  if(!MAP){
+    MAP=L.map('map',{attributionControl:false}).setView([CFG?.home?.lat||39.07,CFG?.home?.lng||-94.58],14);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{maxZoom:19}).addTo(MAP);
+  }
+  if(mapDrawn) return; mapDrawn=true;
+  const cfg=CFG||await api('/api/config'); CFG=cfg;
+  const home=cfg.home;
+  L.circleMarker([home.lat,home.lng],{radius:7,color:'#fff',fillColor:'#fff',fillOpacity:1,weight:2}).addTo(MAP).bindPopup('Home');
+  L.circle([home.lat,home.lng],{radius:cfg.radius_miles*1609.34,color:'#fff',weight:1,opacity:.5,fill:false}).addTo(MAP);
+  const sev=o=>/murder|homicide|shoot|assault \(agg|robbery|weapon/i.test(o)?'#ff453a'
+    :/burglar|stolen|stealing|theft|auto/i.test(o)?'#ff9f0a':'#6a6e73';
+  (c.incidents||[]).forEach(i=>{
+    if(i.lat==null||i.lng==null) return;
+    L.circleMarker([i.lat,i.lng],{radius:4,color:sev(i.offense),fillColor:sev(i.offense),
+      fillOpacity:.7,weight:1}).addTo(MAP).bindPopup(`<b>${esc(i.offense)}</b><br>${esc(i.address)}<br>${i.date} · ${i.dist_mi} mi`);
+  });
+  $('#crimeMeta').textContent=`${(c.incidents||[]).length} incidents within ${cfg.radius_miles} mi · ${c.generated?('as of '+c.generated.slice(0,10)):'no data'} (published weeks late)`;
+  MAP.setView([home.lat,home.lng],14);
+}
+async function runCrime(){await fetch('/api/run-crime',{method:'POST'});toast('crime pull started (~2s)');setTimeout(()=>{mapDrawn=false;drawMap();},3000);}
+
+// settings
+async function loadCfg(){
+  CFG=await api('/api/config'); const c=CFG;
+  $('#coords').textContent=`${c.home.lat}, ${c.home.lng}`;
+  $('#radius').value=c.radius_miles;
+  $('#streets').value=(c.alerts.near_streets||[]).join('\n');
+  $('#keywords').value=(c.alerts.priority_keywords||[]).join('\n');
+  $('#quiet').value=(c.alerts.quiet_hours||[]).join('\n');
+  $('#bcuser').value=c.scanner.username||'';
+  $('#bcpass').value='';
+  $('#model').value=c.scanner.whisper_model||'';
+  renderFeeds();
+  const dir=await api('/api/feeds'); allFeeds=Array.isArray(dir)?dir:[];
+  $('#feedpick').innerHTML=allFeeds.map(f=>`<option value="${f.id}">${f.id} · ${f.name}</option>`).join('')||'<option>directory unavailable</option>';
+}
+function renderFeeds(){
+  const feeds=CFG.scanner.feeds||[];
+  $('#feedlist').innerHTML=feeds.map((f,i)=>`<div class="feeditem"><b>${f.id}</b> <span class="muted">${f.name||''}</span>
+    <span class="x" onclick="rmFeed(${i})">remove</span></div>`).join('')||'<div class="muted">no feeds</div>';
+}
+function addFeed(){const id=$('#feedpick').value;const f=allFeeds.find(x=>x.id===id)||{id,name:id};
+  CFG.scanner.feeds=CFG.scanner.feeds||[];
+  if(!CFG.scanner.feeds.some(x=>x.id===id)){CFG.scanner.feeds.push({id:f.id,name:f.name,stream_url:''});renderFeeds();}}
+function rmFeed(i){CFG.scanner.feeds.splice(i,1);renderFeeds();}
+async function geocode(){
+  const a=$('#addr').value.trim();if(!a)return;
+  const r=await api('/api/geocode',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({address:a})});
+  if(r.error){toast('geocode: '+r.error);return;}
+  CFG.home.lat=r.lat;CFG.home.lng=r.lng;$('#coords').textContent=`${r.lat}, ${r.lng}  (${r.display})`;toast('geocoded');
+}
+async function saveCfg(restart){
+  const c=CFG;
+  c.radius_miles=parseFloat($('#radius').value);
+  c.alerts.near_streets=$('#streets').value.split('\n').map(s=>s.trim()).filter(Boolean);
+  c.alerts.priority_keywords=$('#keywords').value.split('\n').map(s=>s.trim()).filter(Boolean);
+  c.alerts.quiet_hours=$('#quiet').value.split('\n').map(s=>s.trim()).filter(Boolean);
+  c.scanner.username=$('#bcuser').value.trim();
+  if($('#bcpass').value) c.scanner.password=$('#bcpass').value;
+  c.scanner.whisper_model=$('#model').value.trim();
+  await fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(c)});
+  if(restart) await fetch('/api/service/capture/restart',{method:'POST'});
+  toast(restart?'saved + capture restarting':'saved');
+}
+
+refreshStatus(); refreshDash();
+setInterval(refreshStatus,6000); setInterval(refreshDash,5000);
+if(location.hash && location.hash!=='#dash') showTab(location.hash.slice(1));
+</script>
+</body>
+</html>

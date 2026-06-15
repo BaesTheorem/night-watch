@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Transcribe + alert (KeepAlive). Installed by ./install.sh. -->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.nightwatch.transcribe</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>__PYTHON__</string>
+    <string>__DIR__/scanner_transcribe.py</string>
+  </array>
+  <key>WorkingDirectory</key><string>__DIR__</string>
+  <key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>__DIR__/logs/transcribe.out.log</string>
+  <key>StandardErrorPath</key><string>__DIR__/logs/transcribe.err.log</string>
+</dict>
+</plist>
