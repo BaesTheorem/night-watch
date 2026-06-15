@@ -76,10 +76,12 @@ A full-featured control panel (`app.py`, Flask + pywebview, http://127.0.0.1:501
 - **Dashboard** — service health pills (click to start/stop), live transcript
   stream (feed-tagged), scanner alerts, counters, and a **Listen** control to tune
   into any configured feed's live audio in-app (streamed via the backend).
-- **Map** — Leaflet map with your home marker, radius ring, and color-coded
-  incident pins you can filter by type (violent / property / other), plus a
-  **Live CAD** layer when a real-time feed is configured. Crime pins are labeled
-  with the data's publish lag.
+- **Map** — Leaflet map with your home marker and radius ring. A **Layers**
+  panel (top-right) toggles each layer on/off: crime pins by type (violent /
+  property / other), the optional **Live CAD** layer, and the **Live Scanner**
+  layer — incidents geocoded (approximately) from scanner alerts that drop onto
+  the map as they're heard and refresh every ~10s. Crime pins note their publish
+  lag; scanner pins are marked approximate.
 - **Settings** — geocode your address, set radius, add/remove feeds from the live
   KC directory, edit near-streets / priority keywords / quiet hours, manage the
   Broadcastify login. Save and optionally restart capture in one click.

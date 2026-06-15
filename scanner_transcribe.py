@@ -14,11 +14,14 @@ data/ for later review. Runs forever (launchd KeepAlive).
 """
 import array
 import glob
+import json
 import os
 import re
 import shutil
 import subprocess
 import time
+import urllib.parse
+import urllib.request
 import wave
 from datetime import datetime
 
@@ -159,6 +162,65 @@ def feed_of(wav_path):
     return m.group(1) if m else "?"
 
 
+LIVE_PATH = os.path.join(DATA, "live.json")
+_geocache = {}
+
+
+def locate(text, cfg):
+    """Best-effort approximate geocode of a place named in a transcript, bounded
+    to near home (a mentioned near-street, enriched with a house number or cross
+    street when present). Returns (lat, lng) or None. Approximate by nature —
+    scanner audio is spoken and noisy."""
+    home = cfg["home"]
+    low = " " + re.sub(r"\s+", " ", text.lower()) + " "
+    streets = [s.lower() for s in cfg["alerts"].get("near_streets", [])]
+    hit = next((s for s in streets if s in low), None)
+    if not hit:
+        return None
+    q = hit
+    m = re.search(r"(\d{2,5})\s+(?:[a-z]+\s+){0,2}" + re.escape(hit), low)
+    if m:
+        q = f"{m.group(1)} {hit}"
+    else:
+        m2 = re.search(re.escape(hit) + r"\s+(?:and|at|&)\s+([a-z0-9]+(?:\s+[a-z]+)?)", low)
+        if m2:
+            q = f"{hit} and {m2.group(1).strip()}"
+    if q in _geocache:
+        return _geocache[q]
+    d = 0.06  # ~4 mi box around home so results stay local
+    viewbox = f"{home['lng']-d},{home['lat']+d},{home['lng']+d},{home['lat']-d}"
+    url = "https://nominatim.openstreetmap.org/search?" + urllib.parse.urlencode(
+        {"q": q, "format": "json", "limit": 1, "viewbox": viewbox, "bounded": 1})
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "night-watch/1.0"})
+        res = json.load(urllib.request.urlopen(req, timeout=15))
+        out = (float(res[0]["lat"]), float(res[0]["lon"])) if res else None
+    except Exception:  # noqa: BLE001
+        out = None
+    _geocache[q] = out
+    return out
+
+
+def append_live(cfg, rec):
+    """Append a located incident to the rolling live feed (last 6h, max 80)."""
+    try:
+        items = json.load(open(LIVE_PATH)) if os.path.exists(LIVE_PATH) else []
+    except (ValueError, OSError):
+        items = []
+    items.append(rec)
+    cutoff = datetime.now().timestamp() - 6 * 3600
+
+    def ts(r):
+        try:
+            return datetime.strptime(r["time"], "%Y-%m-%d %H:%M").timestamp()
+        except (ValueError, KeyError):
+            return 0
+    items = [r for r in items if ts(r) >= cutoff][-80:]
+    os.makedirs(DATA, exist_ok=True)
+    with open(LIVE_PATH, "w") as f:
+        json.dump(items, f)
+
+
 def fire(cfg, severity, reason, text, feed="?"):
     key = f"{severity}:{reason.lower()}"
     now = time.time()
@@ -179,6 +241,15 @@ def fire(cfg, severity, reason, text, feed="?"):
         if new:
             f.write("### Scanner Alerts\nReal-time matches from the Broadcastify feed. Newest at bottom.\n\n")
         f.write(f"- **{datetime.now().strftime('%Y-%m-%d %H:%M')}** [{severity}] **{reason}** _(feed {feed})_ — {snippet}\n")
+
+    # plot it on the live map if we can approximately locate it
+    loc = locate(text, cfg)
+    if loc:
+        append_live(cfg, {
+            "time": datetime.now().strftime("%Y-%m-%d %H:%M"),
+            "lat": loc[0], "lng": loc[1],
+            "severity": severity, "reason": reason, "text": snippet, "feed": feed,
+        })
 
     quiet = in_quiet_hours(cfg)
     msg = f"{reason} near you at {stamp}" if severity == "nearby" else f"{reason} on the scanner at {stamp}"

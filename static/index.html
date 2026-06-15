@@ -71,14 +71,22 @@
   .badge{padding:2px 7px;font-size:10px;text-transform:uppercase;letter-spacing:1px;font-weight:700}
   .badge.priority{background:var(--priority);color:#fff}
   .badge.nearby{background:var(--nearby);color:#000}
-  #map{height:76vh;border:1px solid var(--line)}
+  .mapwrap{position:relative}
+  #nwmap{height:76vh;border:1px solid var(--line)}
   .maphead{display:flex;gap:14px;align-items:center;margin-bottom:10px;color:var(--dim)}
-  .mapfilters{display:flex;gap:8px}
-  .chip{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);padding:4px 11px;
-    cursor:pointer;font-size:12px;user-select:none;color:var(--dim2)}
-  .chip.on{color:var(--ink);border-color:var(--dim)}
-  .chip i{width:8px;height:8px;border-radius:50%;display:inline-block;opacity:.3}
-  .chip.on i{opacity:1}
+  /* prominent on-map layer filter */
+  .maplegend{position:absolute;top:12px;right:12px;z-index:1000;background:rgba(0,0,0,.82);
+    border:1px solid var(--line);padding:10px 12px;min-width:168px;backdrop-filter:blur(2px)}
+  .maplegend h3{margin:0 0 8px;font-size:10px;letter-spacing:1.5px;color:var(--dim);
+    text-transform:uppercase;font-weight:600}
+  .legrow{display:flex;align-items:center;gap:9px;padding:5px 0;cursor:pointer;user-select:none;
+    font-size:13px;color:var(--dim2)}
+  .legrow:hover{color:var(--ink)}
+  .legrow.on{color:var(--ink)}
+  .legrow i{width:10px;height:10px;border-radius:50%;flex:none;opacity:.25}
+  .legrow.on i{opacity:1}
+  .legrow .ct{margin-left:auto;color:var(--dim2);font-variant-numeric:tabular-nums;font-size:12px}
+  .legrow.off i{box-shadow:none}
   form .field{margin-bottom:16px}
   label{display:block;color:var(--dim);text-transform:uppercase;font-size:10px;letter-spacing:1.5px;
     margin-bottom:6px;font-weight:600}
@@ -138,10 +146,12 @@
   <section class="tab" id="map">
     <div class="maphead">
       <span id="crimeMeta">crime layer</span>
-      <div class="mapfilters" id="mapfilters"></div>
       <button class="small" onclick="runCrime()" style="margin-left:auto">Refresh crime data</button>
     </div>
-    <div id="map"></div>
+    <div class="mapwrap">
+      <div id="nwmap"></div>
+      <div class="maplegend" id="maplegend"></div>
+    </div>
   </section>
 
   <section class="tab" id="settings">
@@ -268,13 +278,13 @@ const CATS=[
   {key:'other',   label:'Other',    color:'#6a6e73', test:()=>true},
 ];
 const catOf=o=>(CATS.find(c=>c.test(o))||CATS[2]).key;
-let MAP_LAYERS={}, OVERLAY=null, MAP_ACTIVE={violent:true,property:true,other:true,cad:true}, MAP_COUNTS=null;
+let MAP_LAYERS={}, OVERLAY=null, MAP_ACTIVE={violent:true,property:true,other:true,cad:true,live:true}, MAP_COUNTS=null;
 
 async function drawMap(){
   const c=await api('/api/crime');
   const cfg=CFG||await api('/api/config'); CFG=cfg;
   if(!MAP){
-    MAP=L.map('map',{attributionControl:false}).setView([cfg.home.lat,cfg.home.lng],14);
+    MAP=L.map('nwmap',{attributionControl:false}).setView([cfg.home.lat,cfg.home.lng],14);
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{maxZoom:19}).addTo(MAP);
   }
   if(mapDrawn) return; mapDrawn=true;
@@ -305,23 +315,42 @@ async function drawMap(){
         .bindPopup(`<b>${esc(i.type)}</b> <span style="color:#4da6ff">LIVE</span><br>${esc(i.address)}<br>${i.time} · ${i.dist_mi} mi`).addTo(MAP_LAYERS.cad);
     });
   }
-  renderMapFilters();
-  $('#crimeMeta').textContent=`${(c.incidents||[]).length} incidents within ${cfg.radius_miles} mi · ${c.generated?('as of '+c.generated.slice(0,10)):'no data'} (published weeks late)`;
+  $('#crimeMeta').textContent=`${(c.incidents||[]).length} crime incidents within ${cfg.radius_miles} mi · ${c.generated?('as of '+c.generated.slice(0,10)):'no data'} (published weeks late)`;
   MAP.setView([home.lat,home.lng],14);
+  await refreshLive();   // adds the live scanner layer + renders the legend
 }
-function chipHTML(key,label,color){
-  return `<span class="chip ${MAP_ACTIVE[key]?'on':''}" onclick="toggleCat('${key}')">
-    <i style="background:${color}"></i>${label}${MAP_COUNTS?' '+(MAP_COUNTS[key]||0):''}</span>`;
+// live scanner incidents (approximate, geocoded from alerts) — refreshed often
+async function refreshLive(){
+  if(!MAP) return;
+  const live=await api('/api/live');
+  if(MAP_LAYERS.live) MAP.removeLayer(MAP_LAYERS.live);
+  MAP_LAYERS.live=L.layerGroup();
+  if(!MAP_COUNTS) MAP_COUNTS={};
+  MAP_COUNTS.live=live.length;
+  if(MAP_ACTIVE.live) MAP_LAYERS.live.addTo(MAP);
+  live.forEach(i=>{
+    if(i.lat==null) return;
+    const col=i.severity==='priority'?'#ff453a':'#ffd60a';
+    L.circleMarker([i.lat,i.lng],{radius:6,color:'#fff',weight:1.5,fillColor:col,fillOpacity:.92})
+      .bindPopup(`<b>${esc(i.reason)}</b> <span style="color:#ffd60a">SCANNER</span><br>${esc(i.text)}<br>${i.time} · feed ${i.feed} · approx.`).addTo(MAP_LAYERS.live);
+  });
+  renderLegend();
 }
-function renderMapFilters(){
-  const chips=CATS.map(c=>chipHTML(c.key,c.label,c.color));
-  if(MAP_COUNTS && 'cad' in MAP_COUNTS) chips.push(chipHTML('cad','Live CAD','#4da6ff'));
-  $('#mapfilters').innerHTML=chips.join('');
+function legRow(key,label,color){
+  return `<div class="legrow ${MAP_ACTIVE[key]?'on':''}" onclick="toggleCat('${key}')">
+    <i style="background:${color}"></i><span>${label}</span><span class="ct">${(MAP_COUNTS&&MAP_COUNTS[key])||0}</span></div>`;
+}
+function renderLegend(){
+  if(!MAP_COUNTS) return;
+  const rows=CATS.map(c=>legRow(c.key,c.label,c.color));
+  if('cad' in MAP_COUNTS) rows.push(legRow('cad','Live CAD','#4da6ff'));
+  if('live' in MAP_COUNTS) rows.push(legRow('live','Live Scanner','#ffd60a'));
+  $('#maplegend').innerHTML='<h3>Layers</h3>'+rows.join('');
 }
 function toggleCat(k){
   MAP_ACTIVE[k]=!MAP_ACTIVE[k];
-  if(MAP_ACTIVE[k]) MAP_LAYERS[k].addTo(MAP); else MAP.removeLayer(MAP_LAYERS[k]);
-  renderMapFilters();
+  if(MAP_LAYERS[k]){ if(MAP_ACTIVE[k]) MAP_LAYERS[k].addTo(MAP); else MAP.removeLayer(MAP_LAYERS[k]); }
+  renderLegend();
 }
 async function runCrime(){await fetch('/api/run-crime',{method:'POST'});toast('crime pull started (~2s)');setTimeout(()=>{mapDrawn=false;drawMap();},3000);}
 
@@ -372,6 +401,8 @@ async function saveCfg(restart){
 $('#listenFeed').onchange=changeListen;
 refreshStatus(); refreshDash();
 setInterval(refreshStatus,6000); setInterval(refreshDash,5000);
+// live scanner incidents pop onto the map as they're heard
+setInterval(()=>{ if(MAP && $('#map').classList.contains('active')) refreshLive(); }, 10000);
 if(location.hash && location.hash!=='#dash') showTab(location.hash.slice(1));
 </script>
 </body>

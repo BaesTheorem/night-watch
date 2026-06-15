@@ -139,6 +139,19 @@ def api_crime():
     return jsonify(json.load(open(path)))
 
 
+@app.get("/api/live")
+def api_live():
+    """Located scanner incidents (approximate), newest first."""
+    path = os.path.join(DATA, "live.json")
+    if not os.path.exists(path):
+        return jsonify([])
+    try:
+        items = json.load(open(path))
+    except (ValueError, OSError):
+        items = []
+    return jsonify(list(reversed(items)))
+
+
 @app.get("/api/cad")
 def api_cad():
     path = os.path.join(DATA, "cad.json")
