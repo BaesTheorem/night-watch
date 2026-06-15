@@ -67,6 +67,12 @@
   .badge.nearby{background:var(--nearby);color:#000}
   #map{height:76vh;border:1px solid var(--line)}
   .maphead{display:flex;gap:14px;align-items:center;margin-bottom:10px;color:var(--dim)}
+  .mapfilters{display:flex;gap:8px}
+  .chip{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);padding:4px 11px;
+    cursor:pointer;font-size:12px;user-select:none;color:var(--dim2)}
+  .chip.on{color:var(--ink);border-color:var(--dim)}
+  .chip i{width:8px;height:8px;border-radius:50%;display:inline-block;opacity:.3}
+  .chip.on i{opacity:1}
   form .field{margin-bottom:16px}
   label{display:block;color:var(--dim);text-transform:uppercase;font-size:10px;letter-spacing:1.5px;
     margin-bottom:6px;font-weight:600}
@@ -121,7 +127,8 @@
   <section class="tab" id="map">
     <div class="maphead">
       <span id="crimeMeta">crime layer</span>
-      <button class="small" onclick="runCrime()">Refresh crime data</button>
+      <div class="mapfilters" id="mapfilters"></div>
+      <button class="small" onclick="runCrime()" style="margin-left:auto">Refresh crime data</button>
     </div>
     <div id="map"></div>
   </section>
@@ -220,27 +227,51 @@ async function refreshDash(){
 }
 const esc=s=>(s||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 
-// map
+// map — incidents grouped into toggleable category layers
+const CATS=[
+  {key:'violent', label:'Violent',  color:'#ff453a', test:o=>/murder|homicide|shoot|assault \(agg|robbery|weapon|rape|sex|kidnap|arson/i.test(o)},
+  {key:'property',label:'Property', color:'#ff9f0a', test:o=>/burglar|stolen|stealing|theft|auto|larceny|vandal|property|damage|fraud|forgery/i.test(o)},
+  {key:'other',   label:'Other',    color:'#6a6e73', test:()=>true},
+];
+const catOf=o=>(CATS.find(c=>c.test(o))||CATS[2]).key;
+let MAP_LAYERS={}, OVERLAY=null, MAP_ACTIVE={violent:true,property:true,other:true}, MAP_COUNTS=null;
+
 async function drawMap(){
   const c=await api('/api/crime');
+  const cfg=CFG||await api('/api/config'); CFG=cfg;
   if(!MAP){
-    MAP=L.map('map',{attributionControl:false}).setView([CFG?.home?.lat||39.07,CFG?.home?.lng||-94.58],14);
+    MAP=L.map('map',{attributionControl:false}).setView([cfg.home.lat,cfg.home.lng],14);
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{maxZoom:19}).addTo(MAP);
   }
   if(mapDrawn) return; mapDrawn=true;
-  const cfg=CFG||await api('/api/config'); CFG=cfg;
+  // clear any previous overlay/category layers (e.g. after a refresh)
+  if(OVERLAY) MAP.removeLayer(OVERLAY);
+  Object.values(MAP_LAYERS).forEach(l=>MAP.removeLayer(l));
   const home=cfg.home;
-  L.circleMarker([home.lat,home.lng],{radius:7,color:'#fff',fillColor:'#fff',fillOpacity:1,weight:2}).addTo(MAP).bindPopup('Home');
-  L.circle([home.lat,home.lng],{radius:cfg.radius_miles*1609.34,color:'#fff',weight:1,opacity:.5,fill:false}).addTo(MAP);
-  const sev=o=>/murder|homicide|shoot|assault \(agg|robbery|weapon/i.test(o)?'#ff453a'
-    :/burglar|stolen|stealing|theft|auto/i.test(o)?'#ff9f0a':'#6a6e73';
+  OVERLAY=L.layerGroup().addTo(MAP);
+  L.circleMarker([home.lat,home.lng],{radius:7,color:'#fff',fillColor:'#fff',fillOpacity:1,weight:2}).addTo(OVERLAY).bindPopup('Home');
+  L.circle([home.lat,home.lng],{radius:cfg.radius_miles*1609.34,color:'#fff',weight:1,opacity:.5,fill:false}).addTo(OVERLAY);
+  MAP_LAYERS={}; MAP_COUNTS={violent:0,property:0,other:0};
+  CATS.forEach(cat=>{MAP_LAYERS[cat.key]=L.layerGroup(); if(MAP_ACTIVE[cat.key]) MAP_LAYERS[cat.key].addTo(MAP);});
   (c.incidents||[]).forEach(i=>{
     if(i.lat==null||i.lng==null) return;
-    L.circleMarker([i.lat,i.lng],{radius:4,color:sev(i.offense),fillColor:sev(i.offense),
-      fillOpacity:.7,weight:1}).addTo(MAP).bindPopup(`<b>${esc(i.offense)}</b><br>${esc(i.address)}<br>${i.date} · ${i.dist_mi} mi`);
+    const cat=catOf(i.offense), col=CATS.find(x=>x.key===cat).color;
+    MAP_COUNTS[cat]++;
+    L.circleMarker([i.lat,i.lng],{radius:4,color:col,fillColor:col,fillOpacity:.7,weight:1})
+      .bindPopup(`<b>${esc(i.offense)}</b><br>${esc(i.address)}<br>${i.date} · ${i.dist_mi} mi`).addTo(MAP_LAYERS[cat]);
   });
+  renderMapFilters();
   $('#crimeMeta').textContent=`${(c.incidents||[]).length} incidents within ${cfg.radius_miles} mi · ${c.generated?('as of '+c.generated.slice(0,10)):'no data'} (published weeks late)`;
   MAP.setView([home.lat,home.lng],14);
+}
+function renderMapFilters(){
+  $('#mapfilters').innerHTML=CATS.map(c=>`<span class="chip ${MAP_ACTIVE[c.key]?'on':''}" onclick="toggleCat('${c.key}')">
+    <i style="background:${c.color}"></i>${c.label}${MAP_COUNTS?' '+MAP_COUNTS[c.key]:''}</span>`).join('');
+}
+function toggleCat(k){
+  MAP_ACTIVE[k]=!MAP_ACTIVE[k];
+  if(MAP_ACTIVE[k]) MAP_LAYERS[k].addTo(MAP); else MAP.removeLayer(MAP_LAYERS[k]);
+  renderMapFilters();
 }
 async function runCrime(){await fetch('/api/run-crime',{method:'POST'});toast('crime pull started (~2s)');setTimeout(()=>{mapDrawn=false;drawMap();},3000);}
 

@@ -55,6 +55,9 @@ You need two things, both kept out of git:
    ```
    The model downloads on first run and caches.
 
+3. **Optional:** `brew install terminal-notifier` so alert notifications are
+   clickable and open the app (otherwise a native notification is used).
+
 ### Run it
 
 ```sh
@@ -99,6 +102,34 @@ transcripts all live in gitignored paths (`config.json`, `spool/`, `data/`,
 `logs/`, `notify-*.sh`). Only `config.example.json` (generic placeholder coords)
 is committed. The launchd plists are placeholder templates filled in at install
 time, so no machine-specific paths are committed either.
+
+## Use in another city
+
+Nothing here is hardcoded to Kansas City beyond the example config:
+
+- **Crime layer** — works with any city's Socrata open-data portal. In
+  `config.json` set `crime.domain` and `crime.incidents_dataset` to that city's
+  crime dataset, and map `crime.fields` to its column names (the date, offense,
+  address, and location-point columns). Most large US cities publish a Socrata
+  crime dataset; some use ArcGIS instead (a small fetch tweak).
+- **Scanner layer** — Broadcastify covers most of the US (and beyond). Set
+  `scanner.directory_url` to your metro/county listing page and pick feeds from
+  it in the GUI. Capture and transcription are location-agnostic.
+- **Alerts** — `home`, `radius_miles`, and `near_streets` are all config.
+
+### Other data sources worth adding
+
+The same "near home, real-time, on-device" pattern extends cleanly to other free,
+official feeds (not yet built, good contributions):
+
+- **NWS weather alerts** (`api.weather.gov/alerts`) — free, no auth, nationwide
+  real-time severe-weather/emergency alerts by point. High value, easy add.
+- **USGS earthquakes** — free real-time GeoJSON feeds.
+- **NASA FIRMS / Watch Duty** — wildfire detection (Watch Duty is West-US).
+- **State 511 / Open511** — traffic incidents and road closures.
+- Some cities publish a genuinely **real-time CAD / calls-for-service** feed
+  (KC's lags weeks, but e.g. Seattle, Austin, and several counties are live) —
+  point the crime layer at those for near-real-time context.
 
 ## Responsible use
 

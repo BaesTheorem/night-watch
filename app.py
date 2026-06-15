@@ -155,8 +155,12 @@ def api_feeds():
         return jsonify(_feeds_cache["data"])
     feeds = []
     try:
-        req = urllib.request.Request("https://www.broadcastify.com/listen/mid/63",
-                                     headers={"User-Agent": UA})
+        cfg = load_config()
+        directory = cfg["scanner"].get("directory_url", "https://www.broadcastify.com/listen/mid/63")
+    except SystemExit:
+        directory = "https://www.broadcastify.com/listen/mid/63"
+    try:
+        req = urllib.request.Request(directory, headers={"User-Agent": UA})
         html = urllib.request.urlopen(req, timeout=20).read().decode("utf-8", "replace")
         for m in re.finditer(r'/listen/feed/(\d+)"[^>]*>([^<]+)<', html):
             fid, name = m.group(1), m.group(2).strip()

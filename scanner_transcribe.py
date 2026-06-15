@@ -16,6 +16,7 @@ import array
 import glob
 import os
 import re
+import shutil
 import subprocess
 import time
 import wave
@@ -138,10 +139,15 @@ def fire(cfg, severity, reason, text, feed="?"):
     log(f"alert[{severity}]: {reason} :: {snippet}")
 
 
+APP_NAME = "Night Watch"
+APP_BUNDLE_ID = "com.nightwatch.app"
+
+
 def notify(cfg, msg, severity, quiet):
     """Deliver an alert. If alerts.notify_command is set, run it as
     `<command> <message> <severity>` (point it at any notifier you like).
-    Otherwise fall back to a native macOS notification."""
+    Otherwise post a clickable macOS notification that opens the app: prefer
+    terminal-notifier (click activates the app), fall back to osascript."""
     cmd = cfg["alerts"].get("notify_command")
     if cmd and not quiet:
         try:
@@ -150,7 +156,19 @@ def notify(cfg, msg, severity, quiet):
             return
         except Exception as e:  # noqa: BLE001
             log(f"alert: notify_command failed {e!r}")
-    script = f'display notification "{msg}" with title "Night Watch"'
+
+    tn = shutil.which("terminal-notifier") or "/opt/homebrew/bin/terminal-notifier"
+    if os.path.exists(tn):
+        args = [tn, "-title", APP_NAME, "-message", msg,
+                "-sender", APP_BUNDLE_ID,
+                "-execute", f"open -b {APP_BUNDLE_ID}"]
+        if severity == "priority" and not quiet:
+            args += ["-sound", "Basso"]
+        subprocess.run(args, timeout=20, check=False)
+        return
+
+    # fallback: native notification (click opens the posting tool, not the app)
+    script = f'display notification "{msg}" with title "{APP_NAME}"'
     if severity == "priority" and not quiet:
         script += ' sound name "Basso"'
     subprocess.run(["osascript", "-e", script], check=False)

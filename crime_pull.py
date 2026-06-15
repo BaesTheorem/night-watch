@@ -19,11 +19,18 @@ from datetime import datetime, timedelta
 
 from lib.common import ROOT, haversine_miles, load_config, log
 
-SODA_HOST = "https://data.kcmo.org"
+# Default field names match the KC dataset; override crime.fields in config.json
+# to point at any other Socrata crime dataset (any city's open-data portal).
+DEFAULT_FIELDS = {
+    "id": "report", "date": "report_date", "offense": "offense",
+    "description": "description", "address": "address", "zip": "zipcode",
+    "location": "location",
+}
 
 
-def soda_get(dataset, params, app_token=""):
-    url = f"{SODA_HOST}/resource/{dataset}.json?" + urllib.parse.urlencode(params)
+def soda_get(domain, dataset, params, app_token=""):
+    host = domain if domain.startswith("http") else f"https://{domain}"
+    url = f"{host}/resource/{dataset}.json?" + urllib.parse.urlencode(params)
     req = urllib.request.Request(url, headers={"User-Agent": "night-watch/1.0"})
     if app_token:
         req.add_header("X-App-Token", app_token)
@@ -34,31 +41,34 @@ def soda_get(dataset, params, app_token=""):
 def pull_incidents(cfg):
     c = cfg["crime"]
     home = cfg["home"]
+    f = {**DEFAULT_FIELDS, **c.get("fields", {})}
+    domain = c.get("domain", "data.kcmo.org")
     radius_m = cfg["radius_miles"] * 1609.344
     cutoff = (datetime.now() - timedelta(days=c["lookback_days"])).strftime("%Y-%m-%dT00:00:00")
     where = (
-        f"within_circle(location, {home['lat']}, {home['lng']}, {radius_m}) "
-        f"AND report_date > '{cutoff}'"
+        f"within_circle({f['location']}, {home['lat']}, {home['lng']}, {radius_m}) "
+        f"AND {f['date']} > '{cutoff}'"
     )
     rows = soda_get(
+        domain,
         c["incidents_dataset"],
-        {"$where": where, "$order": "report_date DESC", "$limit": 5000},
+        {"$where": where, "$order": f"{f['date']} DESC", "$limit": 5000},
         c.get("app_token", ""),
     )
     out = []
     for r in rows:
-        loc = r.get("location", {})
+        loc = r.get(f["location"], {})
         coords = loc.get("coordinates") if isinstance(loc, dict) else None
         dist = None
         if coords:
             dist = haversine_miles(home["lat"], home["lng"], coords[1], coords[0])
         out.append({
-            "report": r.get("report"),
-            "date": r.get("report_date", "")[:10],
-            "offense": r.get("offense", "Unknown"),
-            "description": r.get("description", ""),
-            "address": (r.get("address") or "").strip(),
-            "zip": r.get("zipcode", ""),
+            "report": r.get(f["id"]),
+            "date": (r.get(f["date"]) or "")[:10],
+            "offense": r.get(f["offense"], "Unknown"),
+            "description": r.get(f["description"], ""),
+            "address": (r.get(f["address"]) or "").strip(),
+            "zip": r.get(f["zip"], ""),
             "lat": coords[1] if coords else None,
             "lng": coords[0] if coords else None,
             "dist_mi": round(dist, 2) if dist is not None else None,
