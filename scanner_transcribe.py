@@ -25,7 +25,7 @@ import urllib.request
 import wave
 from datetime import datetime
 
-from lib.common import ROOT, load_config, log
+from lib.common import CONFIG_PATH, ROOT, load_config, log
 
 SPOOL = os.path.join(ROOT, "spool")
 DATA = os.path.join(ROOT, "data")
@@ -261,15 +261,27 @@ APP_NAME = "Night Watch"
 APP_BUNDLE_ID = "com.nightwatch.app"
 
 
+def voice_enabled():
+    """Read alerts.voice fresh from config each call so the GUI toggle takes
+    effect on the next alert without restarting the service. Defaults to on."""
+    try:
+        with open(CONFIG_PATH) as f:
+            return json.load(f).get("alerts", {}).get("voice", True) is not False
+    except (ValueError, OSError):
+        return True
+
+
 def notify(cfg, msg, severity, quiet):
     """Deliver an alert. If alerts.notify_command is set, run it as
-    `<command> <message> <severity>` (point it at any notifier you like).
-    Otherwise post a clickable macOS notification that opens the app: prefer
-    terminal-notifier (click activates the app), fall back to osascript."""
+    `<command> <message> <severity> <voice>` (voice = "1"/"0"; point it at any
+    notifier you like). Otherwise post a clickable macOS notification that opens
+    the app: prefer terminal-notifier (click activates the app), fall back to
+    osascript. The voice flag (alerts.voice) gates spoken voice and alert sound."""
+    voice = voice_enabled()
     cmd = cfg["alerts"].get("notify_command")
     if cmd and not quiet:
         try:
-            args = ([cmd] if isinstance(cmd, str) else list(cmd)) + [msg, severity]
+            args = ([cmd] if isinstance(cmd, str) else list(cmd)) + [msg, severity, "1" if voice else "0"]
             subprocess.run(args, timeout=20, check=False)
             return
         except Exception as e:  # noqa: BLE001
@@ -280,14 +292,14 @@ def notify(cfg, msg, severity, quiet):
         args = [tn, "-title", APP_NAME, "-message", msg,
                 "-sender", APP_BUNDLE_ID,
                 "-execute", f"open -b {APP_BUNDLE_ID}"]
-        if severity == "priority" and not quiet:
+        if severity == "priority" and not quiet and voice:
             args += ["-sound", "Basso"]
         subprocess.run(args, timeout=20, check=False)
         return
 
     # fallback: native notification (click opens the posting tool, not the app)
     script = f'display notification "{msg}" with title "{APP_NAME}"'
-    if severity == "priority" and not quiet:
+    if severity == "priority" and not quiet and voice:
         script += ' sound name "Basso"'
     subprocess.run(["osascript", "-e", script], check=False)
 

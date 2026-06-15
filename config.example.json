@@ -45,7 +45,8 @@
     "whisper_prompt": ""
   },
   "alerts": {
-    "_comment": "near_streets: lowercased street names within/around your radius matched against transcribed dispatch audio. priority_keywords: incident types that always alert regardless of location. notify_command: optional path to your own notifier, called as `<command> <message> <severity>`; leave empty for native macOS notifications.",
+    "_comment": "near_streets: lowercased street names within/around your radius matched against transcribed dispatch audio. priority_keywords: incident types that always alert regardless of location. notify_command: optional path to your own notifier, called as `<command> <message> <severity> <voice>`; leave empty for native macOS notifications. voice: speak alerts aloud / play alert sound (toggleable in the app).",
+    "voice": true,
     "notify_command": "",
     "near_streets": [],
     "priority_keywords": [

@@ -95,6 +95,13 @@
   input:focus,textarea:focus,select:focus{outline:none;border-color:var(--dim)}
   textarea{min-height:96px;resize:vertical}
   .inline{display:flex;gap:8px}.inline>*{flex:1}
+  .switch{display:inline-flex;align-items:center;gap:11px;cursor:pointer;user-select:none}
+  .switch input{display:none}
+  .switch .track{width:40px;height:20px;border:1px solid var(--line);background:var(--bg);position:relative;flex:none;transition:.12s}
+  .switch .track::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;background:var(--dim);transition:.12s}
+  .switch input:checked + .track{background:var(--ink);border-color:var(--ink)}
+  .switch input:checked + .track::after{left:22px;background:#000}
+  .switch .lbl{font-size:13px;color:var(--ink)}
   button.act{background:var(--ink);border:1px solid var(--ink);color:#000;padding:11px 18px;cursor:pointer;
     font-family:inherit;letter-spacing:1px;font-weight:700;font-size:12px;text-transform:uppercase}
   button.act:hover{background:#000;color:var(--ink)}
@@ -167,6 +174,10 @@
           <div class="field"><label>Near streets (one per line)</label><textarea id="streets"></textarea></div>
           <div class="field"><label>Priority keywords (one per line)</label><textarea id="keywords"></textarea></div>
           <div class="field"><label>Quiet hours (e.g. 23-6, one per line)</label><textarea id="quiet" style="min-height:50px"></textarea></div>
+          <div class="field"><label>Voice alerts</label>
+            <label class="switch"><input type="checkbox" id="voiceToggle"><span class="track"></span>
+              <span class="lbl">Speak alerts aloud (MIST voice + alert sound)</span></label>
+          </div>
         </div>
         <div>
           <div class="field"><label>Active feeds</label>
@@ -253,6 +264,14 @@ function toggleListen(){
   }).catch(e=>{toast('audio failed: '+e.message); p.removeAttribute('src');});
 }
 function changeListen(){ if(PLAYING){ toggleListen(); toggleListen(); } }
+
+// voice alert toggle — saves immediately so it takes effect on the next alert
+async function setVoice(){
+  if(!CFG) return;
+  CFG.alerts.voice=$('#voiceToggle').checked;
+  await fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(CFG)});
+  toast('voice alerts '+(CFG.alerts.voice?'on':'off'));
+}
 
 async function toggle(k,on){await fetch(`/api/service/${k}/${on?'stop':'restart'}`,{method:'POST'});toast(`${k} ${on?'stopped':'started'}`);setTimeout(refreshStatus,800);}
 async function runService(k){await fetch(`/api/service/${k}/run`,{method:'POST'});toast(`${k} pull started`);setTimeout(refreshStatus,1500);}
@@ -362,6 +381,7 @@ async function loadCfg(){
   $('#streets').value=(c.alerts.near_streets||[]).join('\n');
   $('#keywords').value=(c.alerts.priority_keywords||[]).join('\n');
   $('#quiet').value=(c.alerts.quiet_hours||[]).join('\n');
+  $('#voiceToggle').checked=c.alerts.voice!==false;
   $('#bcuser').value=c.scanner.username||'';
   $('#bcpass').value='';
   $('#model').value=c.scanner.whisper_model||'';
@@ -390,6 +410,7 @@ async function saveCfg(restart){
   c.alerts.near_streets=$('#streets').value.split('\n').map(s=>s.trim()).filter(Boolean);
   c.alerts.priority_keywords=$('#keywords').value.split('\n').map(s=>s.trim()).filter(Boolean);
   c.alerts.quiet_hours=$('#quiet').value.split('\n').map(s=>s.trim()).filter(Boolean);
+  c.alerts.voice=$('#voiceToggle').checked;
   c.scanner.username=$('#bcuser').value.trim();
   if($('#bcpass').value) c.scanner.password=$('#bcpass').value;
   c.scanner.whisper_model=$('#model').value.trim();
@@ -399,6 +420,7 @@ async function saveCfg(restart){
 }
 
 $('#listenFeed').onchange=changeListen;
+$('#voiceToggle').onchange=setVoice;
 refreshStatus(); refreshDash();
 setInterval(refreshStatus,6000); setInterval(refreshDash,5000);
 // live scanner incidents pop onto the map as they're heard
