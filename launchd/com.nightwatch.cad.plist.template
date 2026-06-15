@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Real-time CAD / calls-for-service poll (every 15 min). No-op unless cad is
+     enabled in config.json. Installed by ./install.sh. -->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.nightwatch.cad</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>__PYTHON__</string>
+    <string>__DIR__/cad_pull.py</string>
+  </array>
+  <key>WorkingDirectory</key><string>__DIR__</string>
+  <key>StartInterval</key><integer>900</integer>
+  <key>StandardOutPath</key><string>__DIR__/logs/cad.out.log</string>
+  <key>StandardErrorPath</key><string>__DIR__/logs/cad.err.log</string>
+</dict>
+</plist>

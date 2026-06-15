@@ -16,7 +16,7 @@ import urllib.parse
 import urllib.request
 from datetime import datetime
 
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, Response, jsonify, request, send_from_directory
 
 from lib.common import CONFIG_PATH, ROOT, load_config
 
@@ -27,10 +27,11 @@ SERVICES = {
     "capture": "com.nightwatch.capture",
     "transcribe": "com.nightwatch.transcribe",
     "crime": "com.nightwatch.crime",
+    "cad": "com.nightwatch.cad",
 }
-# crime is a weekly StartCalendarInterval job, not a daemon — it's "scheduled",
-# not "on/off". Don't bootout it (that would unschedule the weekly refresh).
-SCHEDULED = {"crime"}
+# crime (weekly) and cad (every 15 min) are scheduled jobs, not daemons — they're
+# "scheduled", not "on/off". Don't bootout them (that would unschedule them).
+SCHEDULED = {"crime", "cad"}
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
 _feeds_cache = {}
 
@@ -138,6 +139,14 @@ def api_crime():
     return jsonify(json.load(open(path)))
 
 
+@app.get("/api/cad")
+def api_cad():
+    path = os.path.join(DATA, "cad.json")
+    if not os.path.exists(path):
+        return jsonify({"generated": None, "incidents": []})
+    return jsonify(json.load(open(path)))
+
+
 @app.get("/api/config")
 def api_config_get():
     if not os.path.exists(CONFIG_PATH):
@@ -219,6 +228,49 @@ def api_service(key, action):
     except Exception as e:  # noqa: BLE001
         return jsonify({"error": str(e)}), 500
     return jsonify({"ok": True})
+
+
+_stream_cache = {}  # feed_id -> (url, epoch)
+
+
+@app.get("/api/stream/<feed_id>")
+def api_stream(feed_id):
+    """Proxy a feed's live audio to the browser so it can be played in-app."""
+    import time as _t
+    import scanner_capture as sc
+    try:
+        cfg = load_config()
+    except SystemExit:
+        return jsonify({"error": "no config"}), 400
+    feeds = {str(f.get("id")): f for f in (cfg["scanner"].get("feeds") or [])}
+    if feed_id not in feeds:
+        return jsonify({"error": "unknown feed"}), 404
+
+    cached = _stream_cache.get(feed_id)
+    if cached and cached[1] > _t.time() - 1800:
+        url = cached[0]
+    else:
+        op = sc.login(cfg)
+        url = sc.resolve_stream(op, {**feeds[feed_id], "id": feed_id})
+        _stream_cache[feed_id] = (url, _t.time())
+
+    upstream = urllib.request.urlopen(
+        urllib.request.Request(url, headers={"User-Agent": UA}), timeout=20)
+
+    def gen():
+        try:
+            while True:
+                chunk = upstream.read(8192)
+                if not chunk:
+                    break
+                yield chunk
+        except GeneratorExit:
+            pass
+        finally:
+            upstream.close()
+
+    ctype = upstream.headers.get("Content-Type", "audio/mpeg")
+    return Response(gen(), content_type=ctype)
 
 
 @app.post("/api/run-crime")

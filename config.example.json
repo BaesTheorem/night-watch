@@ -18,6 +18,19 @@
     "lookback_days": 120,
     "app_token": ""
   },
+  "cad": {
+    "_comment": "Optional real-time calls-for-service layer. Many cities publish a genuinely live dispatch feed (KC's lags, so this is off here). Set enabled=true and point domain + incidents_dataset at your city's live CAD, mapping fields to its columns. The example below is Seattle's live Fire 911 feed. alert=true notifies on new calls near home.",
+    "enabled": false,
+    "alert": false,
+    "domain": "data.seattle.gov",
+    "incidents_dataset": "kzjm-xkqj",
+    "fields": {
+      "id": "incident_number", "datetime": "datetime", "type": "type",
+      "address": "address", "location": "report_location"
+    },
+    "lookback_hours": 24,
+    "app_token": ""
+  },
   "scanner": {
     "_comment": "Broadcastify live audio (real-time alert layer). Free account required; stream URLs are session-gated, so the script logs in to fetch them. Add one or more feeds; each runs its own capture. directory_url is the Broadcastify listing the GUI's feed picker reads — set it to your metro/county page (browse from broadcastify.com/listen).",
     "directory_url": "https://www.broadcastify.com/listen/mid/63",

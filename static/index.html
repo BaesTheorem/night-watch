@@ -28,8 +28,14 @@
   nav button.active{color:var(--ink)}
   .statusbar{display:flex;align-items:center;gap:10px;padding:9px 24px;background:var(--panel);
     border-bottom:1px solid var(--line)}
-  .clock{margin-left:auto;color:var(--dim2);font-size:12px;font-variant-numeric:tabular-nums;letter-spacing:.5px}
+  .clock{margin-left:14px;color:var(--dim2);font-size:12px;font-variant-numeric:tabular-nums;letter-spacing:.5px}
   .svc-pills{display:flex;gap:8px}
+  .listen{margin-left:auto;display:flex;align-items:center;gap:6px}
+  .listen select{background:var(--bg);border:1px solid var(--line);color:var(--ink);
+    padding:3px 7px;font-family:inherit;font-size:12px;max-width:210px}
+  .listenbtn{display:flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--bg);
+    color:var(--ink);padding:4px 12px;cursor:pointer;font-family:inherit;font-size:12px;letter-spacing:1px;white-space:nowrap}
+  .listenbtn.on{border-color:var(--ink);background:var(--ink);color:#000}
   .pill{display:flex;align-items:center;gap:7px;padding:4px 11px;border:1px solid var(--line);
     cursor:pointer;user-select:none;font-size:12px;background:var(--bg)}
   .pill .dot{width:7px;height:7px;border-radius:50%;background:var(--dim2)}
@@ -113,8 +119,13 @@
 </header>
 <div class="statusbar">
   <div class="svc-pills" id="pills"></div>
+  <div class="listen">
+    <select id="listenFeed"></select>
+    <button class="listenbtn" id="listenBtn" onclick="toggleListen()">&#9654; LISTEN</button>
+  </div>
   <span class="clock" id="clock">--:--:--</span>
 </div>
+<audio id="player"></audio>
 <main>
   <section class="tab active" id="dash">
     <div class="stats" id="stats"></div>
@@ -209,7 +220,30 @@ async function refreshStatus(){
     ['feeds',(s.feeds||[]).length],['',(s.feeds||[]).map(f=>f.name||f.id).join(', ')||'—']
   ].map(([k,v])=>`<div class="stat"><div class="v">${typeof v==='number'?v:''}</div>
     <div class="k">${k||'active feeds'}</div>${typeof v==='number'?'':'<div class="muted" style="font-size:11px">'+v+'</div>'}</div>`).join('');
+  populateListen(s.feeds);
 }
+// in-app audio: tune into a live feed via the backend stream proxy
+let PLAYING=null;
+function populateListen(feeds){
+  const sel=$('#listenFeed'); if(!sel) return;
+  const cur=sel.value;
+  sel.innerHTML=(feeds||[]).map(f=>`<option value="${f.id}">${esc(f.name||f.id)}</option>`).join('');
+  if(cur&&[...sel.options].some(o=>o.value===cur)) sel.value=cur;
+}
+function toggleListen(){
+  const p=$('#player'), sel=$('#listenFeed'), btn=$('#listenBtn');
+  if(PLAYING){
+    p.pause(); p.removeAttribute('src'); p.load(); PLAYING=null;
+    btn.classList.remove('on'); btn.innerHTML='&#9654; LISTEN'; return;
+  }
+  const id=sel.value; if(!id){toast('no feed selected');return;}
+  p.src='/api/stream/'+encodeURIComponent(id);
+  p.play().then(()=>{
+    PLAYING=id; btn.classList.add('on'); btn.innerHTML='&#9632; '+sel.options[sel.selectedIndex].text;
+  }).catch(e=>{toast('audio failed: '+e.message); p.removeAttribute('src');});
+}
+function changeListen(){ if(PLAYING){ toggleListen(); toggleListen(); } }
+
 async function toggle(k,on){await fetch(`/api/service/${k}/${on?'stop':'restart'}`,{method:'POST'});toast(`${k} ${on?'stopped':'started'}`);setTimeout(refreshStatus,800);}
 async function runService(k){await fetch(`/api/service/${k}/run`,{method:'POST'});toast(`${k} pull started`);setTimeout(refreshStatus,1500);}
 
@@ -234,7 +268,7 @@ const CATS=[
   {key:'other',   label:'Other',    color:'#6a6e73', test:()=>true},
 ];
 const catOf=o=>(CATS.find(c=>c.test(o))||CATS[2]).key;
-let MAP_LAYERS={}, OVERLAY=null, MAP_ACTIVE={violent:true,property:true,other:true}, MAP_COUNTS=null;
+let MAP_LAYERS={}, OVERLAY=null, MAP_ACTIVE={violent:true,property:true,other:true,cad:true}, MAP_COUNTS=null;
 
 async function drawMap(){
   const c=await api('/api/crime');
@@ -260,13 +294,29 @@ async function drawMap(){
     L.circleMarker([i.lat,i.lng],{radius:4,color:col,fillColor:col,fillOpacity:.7,weight:1})
       .bindPopup(`<b>${esc(i.offense)}</b><br>${esc(i.address)}<br>${i.date} · ${i.dist_mi} mi`).addTo(MAP_LAYERS[cat]);
   });
+  // live CAD layer (only if a real-time CAD source is configured + pulled)
+  const cad=await api('/api/cad');
+  if((cad.incidents||[]).length){
+    MAP_LAYERS.cad=L.layerGroup(); if(MAP_ACTIVE.cad) MAP_LAYERS.cad.addTo(MAP);
+    MAP_COUNTS.cad=0;
+    cad.incidents.forEach(i=>{
+      if(i.lat==null) return; MAP_COUNTS.cad++;
+      L.circleMarker([i.lat,i.lng],{radius:5,color:'#4da6ff',fillColor:'#4da6ff',fillOpacity:.85,weight:1})
+        .bindPopup(`<b>${esc(i.type)}</b> <span style="color:#4da6ff">LIVE</span><br>${esc(i.address)}<br>${i.time} · ${i.dist_mi} mi`).addTo(MAP_LAYERS.cad);
+    });
+  }
   renderMapFilters();
   $('#crimeMeta').textContent=`${(c.incidents||[]).length} incidents within ${cfg.radius_miles} mi · ${c.generated?('as of '+c.generated.slice(0,10)):'no data'} (published weeks late)`;
   MAP.setView([home.lat,home.lng],14);
 }
+function chipHTML(key,label,color){
+  return `<span class="chip ${MAP_ACTIVE[key]?'on':''}" onclick="toggleCat('${key}')">
+    <i style="background:${color}"></i>${label}${MAP_COUNTS?' '+(MAP_COUNTS[key]||0):''}</span>`;
+}
 function renderMapFilters(){
-  $('#mapfilters').innerHTML=CATS.map(c=>`<span class="chip ${MAP_ACTIVE[c.key]?'on':''}" onclick="toggleCat('${c.key}')">
-    <i style="background:${c.color}"></i>${c.label}${MAP_COUNTS?' '+MAP_COUNTS[c.key]:''}</span>`).join('');
+  const chips=CATS.map(c=>chipHTML(c.key,c.label,c.color));
+  if(MAP_COUNTS && 'cad' in MAP_COUNTS) chips.push(chipHTML('cad','Live CAD','#4da6ff'));
+  $('#mapfilters').innerHTML=chips.join('');
 }
 function toggleCat(k){
   MAP_ACTIVE[k]=!MAP_ACTIVE[k];
@@ -319,6 +369,7 @@ async function saveCfg(restart){
   toast(restart?'saved + capture restarting':'saved');
 }
 
+$('#listenFeed').onchange=changeListen;
 refreshStatus(); refreshDash();
 setInterval(refreshStatus,6000); setInterval(refreshDash,5000);
 if(location.hash && location.hash!=='#dash') showTab(location.hash.slice(1));

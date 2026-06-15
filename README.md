@@ -74,9 +74,12 @@ python3 scanner_capture.py        # terminal 1
 A full-featured control panel (`app.py`, Flask + pywebview, http://127.0.0.1:5018):
 
 - **Dashboard** — service health pills (click to start/stop), live transcript
-  stream (feed-tagged), scanner alerts, counters.
-- **Map** — Leaflet map with your home marker, radius ring, and color-coded crime
-  pins (red = violent, amber = property), labeled with the data's publish lag.
+  stream (feed-tagged), scanner alerts, counters, and a **Listen** control to tune
+  into any configured feed's live audio in-app (streamed via the backend).
+- **Map** — Leaflet map with your home marker, radius ring, and color-coded
+  incident pins you can filter by type (violent / property / other), plus a
+  **Live CAD** layer when a real-time feed is configured. Crime pins are labeled
+  with the data's publish lag.
 - **Settings** — geocode your address, set radius, add/remove feeds from the live
   KC directory, edit near-streets / priority keywords / quiet hours, manage the
   Broadcastify login. Save and optionally restart capture in one click.
@@ -117,19 +120,27 @@ Nothing here is hardcoded to Kansas City beyond the example config:
   it in the GUI. Capture and transcription are location-agnostic.
 - **Alerts** — `home`, `radius_miles`, and `near_streets` are all config.
 
+### Real-time CAD layer
+
+Where a city publishes a genuinely live calls-for-service feed, Night Watch can
+pull it as a near-real-time layer (separate from the lagging crime data). Enable
+it under `cad` in `config.json`: set `enabled`, point `domain` /
+`incidents_dataset` at the live dataset, and map `fields` to its columns
+(`config.example.json` ships a working **Seattle** example). It polls every 15
+minutes (`com.nightwatch.cad`), shows as the **Live CAD** map layer, and with
+`cad.alert: true` notifies on genuinely new calls near home (deduped by id). KC's
+own CAD lags, so it's off by default here.
+
 ### Other data sources worth adding
 
-The same "near home, real-time, on-device" pattern extends cleanly to other free,
-official feeds (not yet built, good contributions):
+The same "near home, real-time, on-device" pattern extends to other free, official
+feeds (good contributions):
 
 - **NWS weather alerts** (`api.weather.gov/alerts`) — free, no auth, nationwide
   real-time severe-weather/emergency alerts by point. High value, easy add.
 - **USGS earthquakes** — free real-time GeoJSON feeds.
 - **NASA FIRMS / Watch Duty** — wildfire detection (Watch Duty is West-US).
 - **State 511 / Open511** — traffic incidents and road closures.
-- Some cities publish a genuinely **real-time CAD / calls-for-service** feed
-  (KC's lags weeks, but e.g. Seattle, Austin, and several counties are live) —
-  point the crime layer at those for near-real-time context.
 
 ## Responsible use
 
