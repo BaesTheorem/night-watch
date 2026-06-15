@@ -32,7 +32,7 @@
     "app_token": ""
   },
   "scanner": {
-    "_comment": "Broadcastify live audio (real-time alert layer). Free account required; stream URLs are session-gated, so the script logs in to fetch them. Add one or more feeds; each runs its own capture. directory_url is the Broadcastify listing the GUI's feed picker reads — set it to your metro/county page (browse from broadcastify.com/listen).",
+    "_comment": "Broadcastify live audio (real-time alert layer). Free account required; stream URLs are session-gated, so the script logs in to fetch them. Add one or more feeds; each runs its own capture. directory_url is the Broadcastify listing the GUI's feed picker reads — set it to your metro/county page (browse from broadcastify.com/listen). whisper_model: any mlx-community Whisper repo; large-v3-turbo is the accuracy/speed sweet spot for batch scanner audio on Apple Silicon (small.en is lighter but worse on degraded radio). whisper_prompt: optional override for the decoder bias prompt; leave empty to auto-build it from near_streets + priority_keywords.",
     "directory_url": "https://www.broadcastify.com/listen/mid/63",
     "feeds": [
       { "id": "36219", "name": "KC Fire", "stream_url": "" },
@@ -41,7 +41,8 @@
     "username": "",
     "password": "",
     "segment_seconds": 30,
-    "whisper_model": "mlx-community/whisper-small.en-mlx"
+    "whisper_model": "mlx-community/whisper-large-v3-turbo",
+    "whisper_prompt": ""
   },
   "alerts": {
     "_comment": "near_streets: lowercased street names within/around your radius matched against transcribed dispatch audio. priority_keywords: incident types that always alert regardless of location. notify_command: optional path to your own notifier, called as `<command> <message> <severity>`; leave empty for native macOS notifications.",

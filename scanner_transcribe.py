@@ -68,9 +68,56 @@ def likely_silent(wav_path):
         return False
 
 
-def transcribe(wav_path, model):
+# Scanner audio is the worst case for Whisper: lossy radio codecs, clipped
+# speech, ten-codes, and the exact tokens we alert on (street names) are rare
+# words it loves to mangle. An initial_prompt biases the decoder toward the
+# vocabulary we care about. We seed it with the config's streets + keywords plus
+# a fixed dispatch phrasebook, so "prospect" stays "Prospect" not "prospectus".
+_DISPATCH_PHRASEBOOK = (
+    "Police and fire radio dispatch. Units, cross streets, and call types. "
+    "Copy, dispatch, en route, on scene, code three, signal, "
+    "shots fired, structure fire, EMS, ambulance, suspect, vehicle, "
+    "northbound, southbound, eastbound, westbound, avenue, boulevard, terrace."
+)
+
+
+def build_prompt(cfg):
+    """Domain prompt to bias the decoder. Explicit config override wins;
+    otherwise auto-assemble from the streets/keywords we alert on."""
+    override = (cfg["scanner"].get("whisper_prompt") or "").strip()
+    if override:
+        return override
+    alerts = cfg.get("alerts", {})
+    terms = list(alerts.get("near_streets", [])) + list(alerts.get("priority_keywords", []))
+    seen, vocab = set(), []
+    for t in terms:
+        t = t.strip()
+        if t and t.lower() not in seen:
+            seen.add(t.lower())
+            vocab.append(t.title() if t.islower() else t)
+    prompt = _DISPATCH_PHRASEBOOK
+    if vocab:
+        prompt += " Streets and incidents near here: " + ", ".join(vocab) + "."
+    return prompt
+
+
+def transcribe(wav_path, model, prompt=None):
     import mlx_whisper
-    res = mlx_whisper.transcribe(wav_path, path_or_hf_repo=model, language="en")
+    res = mlx_whisper.transcribe(
+        wav_path, path_or_hf_repo=model, language="en",
+        initial_prompt=prompt or None,
+        # Each segment is an independent radio burst — don't let one transcript
+        # seed the next, which is how Whisper spirals into repeated phantoms.
+        condition_on_previous_text=False,
+        # Greedy, no temperature fallback: deterministic and avoids the
+        # higher-temperature re-decodes that invent text on marginal audio.
+        temperature=0.0,
+        # Hallucination guards: drop output that's too repetitive (high
+        # compression ratio), too low-confidence, or reads as silence.
+        compression_ratio_threshold=2.4,
+        logprob_threshold=-1.0,
+        no_speech_threshold=0.6,
+    )
     return (res.get("text") or "").strip()
 
 
@@ -184,9 +231,10 @@ def ready_segments(cfg):
 
 def main():
     cfg = load_config()
-    model = cfg["scanner"].get("whisper_model", "mlx-community/whisper-small.en-mlx")
+    model = cfg["scanner"].get("whisper_model", "mlx-community/whisper-large-v3-turbo")
+    prompt = build_prompt(cfg)
     os.makedirs(DATA, exist_ok=True)
-    log(f"transcribe: watching spool/, model={model}")
+    log(f"transcribe: watching spool/, model={model}, prompt={len(prompt)} chars")
     while True:
         segs = ready_segments(cfg)
         if not segs:
@@ -197,7 +245,7 @@ def main():
                 os.remove(wav)
                 continue
             try:
-                text = transcribe(wav, model)
+                text = transcribe(wav, model, prompt)
             except Exception as e:  # noqa: BLE001
                 log(f"transcribe: failed on {os.path.basename(wav)}: {e!r}")
                 os.remove(wav)
