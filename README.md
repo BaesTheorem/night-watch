@@ -16,6 +16,12 @@ The context layer keeps it honest and grounded; the scanner layer is the actual
 "alert me now" capability. Neither depends on a service that can revoke access
 or a ToS we're violating.
 
+![Map — crime context, live scanner incidents, and a layer filter](docs/map.png)
+
+*The map: crime pins by type, optional live CAD, and live scanner incidents
+geocoded from alerts, all toggleable from the Layers panel. (Screenshots use a
+generic downtown location and demo data.)*
+
 ## How it works
 
 ```
@@ -76,6 +82,9 @@ A full-featured control panel (`app.py`, Flask + pywebview, http://127.0.0.1:501
 - **Dashboard** — service health pills (click to start/stop), live transcript
   stream (feed-tagged), scanner alerts, counters, and a **Listen** control to tune
   into any configured feed's live audio in-app (streamed via the backend).
+
+![Dashboard — live transcript and scanner alerts](docs/dashboard.png)
+
 - **Map** — Leaflet map with your home marker and radius ring. A **Layers**
   panel (top-right) toggles each layer on/off: crime pins by type (violent /
   property / other), the optional **Live CAD** layer, and the **Live Scanner**
@@ -83,8 +92,11 @@ A full-featured control panel (`app.py`, Flask + pywebview, http://127.0.0.1:501
   the map as they're heard and refresh every ~10s. Crime pins note their publish
   lag; scanner pins are marked approximate.
 - **Settings** — geocode your address, set radius, add/remove feeds from the live
-  KC directory, edit near-streets / priority keywords / quiet hours, manage the
-  Broadcastify login. Save and optionally restart capture in one click.
+  KC directory, edit near-streets / priority keywords / quiet hours, toggle voice
+  alerts, manage the Broadcastify login. Save and optionally restart capture in
+  one click.
+
+![Settings](docs/settings.png)
 
 Launch from `~/Desktop/Apps/Night Watch.app`, or `.venv/bin/python app.py`.
 
