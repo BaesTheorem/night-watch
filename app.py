@@ -16,7 +16,7 @@ import urllib.parse
 import urllib.request
 from datetime import datetime
 
-from flask import Flask, Response, jsonify, request, send_from_directory
+from flask import Flask, Response, jsonify, redirect, request, send_from_directory
 
 from lib.common import CONFIG_PATH, ROOT, load_config
 
@@ -267,23 +267,13 @@ def api_stream(feed_id):
         url = sc.resolve_stream(op, {**feeds[feed_id], "id": feed_id})
         _stream_cache[feed_id] = (url, _t.time())
 
-    upstream = urllib.request.urlopen(
-        urllib.request.Request(url, headers={"User-Agent": UA}), timeout=20)
-
-    def gen():
-        try:
-            while True:
-                chunk = upstream.read(8192)
-                if not chunk:
-                    break
-                yield chunk
-        except GeneratorExit:
-            pass
-        finally:
-            upstream.close()
-
-    ctype = upstream.headers.get("Content-Type", "audio/mpeg")
-    return Response(gen(), content_type=ctype)
+    # Hand the browser the real Icecast URL and let WKWebView/AVFoundation play it
+    # directly, the same path the official web player and ffmpeg use. Piping the
+    # bytes back through Werkzeug produced an infinite chunked response with no
+    # icy headers, no Content-Length, and no range support, which WebKit aborts
+    # with "The operation was aborted." The CDN stream needs only a User-Agent
+    # (no cookie/token), which the browser sends automatically.
+    return redirect(url, code=302)
 
 
 @app.post("/api/run-crime")
