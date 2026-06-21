@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Weekly KC crime/CAD context pull (Sundays 07:00). Installed by ./install.sh. -->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.nightwatch.crime</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/alexhedtke/Documents/night-watch/.venv/bin/python</string>
+    <string>/Users/alexhedtke/Documents/night-watch/crime_pull.py</string>
+  </array>
+  <key>WorkingDirectory</key><string>/Users/alexhedtke/Documents/night-watch</string>
+  <key>StartCalendarInterval</key>
+  <dict><key>Weekday</key><integer>0</integer><key>Hour</key><integer>7</integer><key>Minute</key><integer>0</integer></dict>
+  <key>StandardOutPath</key><string>/Users/alexhedtke/Documents/night-watch/logs/crime.out.log</string>
+  <key>StandardErrorPath</key><string>/Users/alexhedtke/Documents/night-watch/logs/crime.err.log</string>
+</dict>
+</plist>

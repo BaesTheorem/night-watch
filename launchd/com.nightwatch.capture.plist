@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Scanner capture (KeepAlive). Installed by ./install.sh, which fills in the
+     /Users/alexhedtke/Documents/night-watch / /Users/alexhedtke/Documents/night-watch/.venv/bin/python placeholders for your checkout. -->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.nightwatch.capture</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/alexhedtke/Documents/night-watch/.venv/bin/python</string>
+    <string>/Users/alexhedtke/Documents/night-watch/scanner_capture.py</string>
+  </array>
+  <key>WorkingDirectory</key><string>/Users/alexhedtke/Documents/night-watch</string>
+  <key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>/Users/alexhedtke/Documents/night-watch/logs/capture.out.log</string>
+  <key>StandardErrorPath</key><string>/Users/alexhedtke/Documents/night-watch/logs/capture.err.log</string>
+</dict>
+</plist>
