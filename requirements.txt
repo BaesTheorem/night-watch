@@ -3,3 +3,4 @@ mlx-whisper
 # GUI
 flask
 pywebview
+setproctitle

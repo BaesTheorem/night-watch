@@ -6,6 +6,11 @@ Flask backend + pywebview window. Read-only monitoring (live transcript, alerts,
 crime map, service health) plus control (edit config, switch feeds, start/stop
 services). Runs on http://127.0.0.1:5017.
 """
+try:
+    import setproctitle
+    setproctitle.setproctitle("Night Watch")
+except ImportError:
+    pass  # cosmetic process name only; never block startup on it
 import glob
 import json
 import os
